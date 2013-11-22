@@ -1,0 +1,106 @@
+//
+// *** Lead Management with Google Mail ***
+//
+// Check for labels and trigger/expiry times, attach "followup" label if overdue and send email with summary
+// 
+// Hint: creates labels followup, ... which are not yet available
+//
+// /Ajax Gaier 2013/
+// 
+
+function mailSupportChecker() {
+  // not on the weekend ;)
+  getDay=(new Date).getDay(); if (getDay == 0 || getDay == 6) return;
+  
+  var sendmail=1; // set to 0 for testing 
+  var num_msgs=0, num_msgs_combined=0, msg="", combine=false;
+  label_arr=[ 
+    {lab: "1week", mindays: 7, combine: true},   // combine = true: collect information from different labels into one email
+    {lab: "3days", mindays: 3, combine: true},
+    {lab: "2weeks", mindays: 14, combine: true},
+     {lab: "4weeks", mindays: 28, combine: true}
+    ];
+  var foup = GmailApp.getUserLabelByName("followup");
+  if (foup == null) {
+    GmailApp.createLabel("followup");
+    foup = GmailApp.getUserLabelByName("followup");
+  }
+  for (idx=0; idx < label_arr.length; idx++) {
+    // var label = GmailApp.getUserLabelByName("support");
+    if (!combine) {
+      var msg = "", num_msgs=0, num_msgs_combined=0;
+    }
+    item=label_arr[idx]; lab=item.lab; combine=item.combine;
+    var label = GmailApp.getUserLabelByName(lab);
+    if (label == null) {
+      GmailApp.createLabel(lab);
+      continue;
+      // label = GmailApp.getUserLabelByName(lab);
+    }
+    var mindays = item.mindays;
+    var threads = label.getThreads();
+    var daysec = 24*3600000; 
+    
+    datenow = (new Date).getTime();
+    var num = 0;
+    for (var i = 0; i < threads.length; i++) {
+      time = threads[i].getLastMessageDate();
+      var messages = threads[i].getMessages();
+      lastmsg = messages[messages.length-1];
+      date_lst_msg = lastmsg.getDate();
+      if (date_lst_msg > time) time = date_lst_msg; // time of lastmsg does not always work well it seems
+      diff_time = (datenow - time) 
+      diff_days = Math.floor(0.+ diff_time / (daysec));
+      subj = threads[i].getFirstMessageSubject();
+      // get from
+      // var firstThread = GmailApp.getInboxThreads(0,1)[0];
+      // from = lastmsg.getReplyTo();
+      from = lastmsg.getFrom();
+      if (diff_days == 0) continue;
+      if (lab.match("support")) {
+        if (diff_days >= 2) {  // labels matching "support" are handled separately 
+          line = "<b>" + diff_days + " days old</b> from: " + from + ": " + subj + '  (<a href="' + threads[i].getPermalink() + '">link</a>)';
+          num_msgs++; num++;
+          msg+=line + "\n\n<p> </p>";
+          // followup label
+          if (diff_days > 5) {
+            // threads[i].addLabel(foup);
+          }
+        } else {
+         // line = "" + diff_days + " days old from: " + from + ": " + subj + '  (<a href="' + threads[i].getPermalink() + '">link</a>)';
+        }
+      } else {
+        // check days interval
+        if (diff_days >= mindays) {
+          line = lab + ": " + "<b>" + diff_days + " days old</b> from: " + from + ": " + subj + '  (<a href="' + threads[i].getPermalink() + '">link</a>)';       
+          num_msgs++;num_msgs_combined++;
+          msg+=line + "\n\n<p> </p>";
+          // add followup label
+          threads[i].addLabel(foup);
+          num++;
+          // Logger.log(">>>>>>>>> " + date_lst_msg + " : " + diff_days + " : " + line);
+        } else {
+         threads[i].removeLabel(foup);  
+        }
+      }
+      // Logger.log(line);
+    }
+    // Logger.log( "LAB " + lab + " MSG " + msg + " COM " + combine + " NUM " + num_msgs + " " + LEN + " " + label_arr.length);
+
+    if (combine && (idx == label_arr.length-1)) {
+      combine=false;
+      var subject = ">>>>>>> "+" Topics Check: " + num_msgs_combined + " items" ;
+    } else {
+      var subject = ">>>>>>> "+lab+" Topics Check: " + num + " items" ; 
+    }
+    if (num_msgs > 0 && !combine) {
+      email = Session.getUser().getEmail();
+      if (sendmail) MailApp.sendEmail(email, subject, msg, { htmlBody: msg } );
+      Logger.log("Mail : \n\n" + msg);
+    }
+
+  }
+  
+    
+}
+
